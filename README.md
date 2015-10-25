@@ -1,6 +1,7 @@
 # Project Report
 
-The Project Report can be viewed here: http://zaros.github.io/8-Practical-Machine-Learning-Project/report.html
+The Project Report can be viewed here:
+ http://zaros.github.io/8-Practical-Machine-Learning-Project/report.html
 
 
 
