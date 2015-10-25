@@ -1,0 +1,110 @@
+---
+title: "Practical Machine Learning Project"
+author: "Reza Rosli (zaros)"
+date: "26 October 2015"
+output: html_document
+---
+
+# Executive Summary 
+
+In this project, we obtained data from a set of accelerometers on the belt, forearm, arm, and dumbell of 6 participants.The participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fash- ions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. 
+
+Here we report on how we used the dataset to create a random forest model to predict the classification of test cases in a test data set, i.e. predict the manner in which they performed a particular exercise. It was found that the generated model was able to predict the classification to 97.92% accuracy and an out of bag estimate of error rate of 1.79%.
+
+# Modeling
+
+## Loading and Cleaning Data
+
+The data used for the analysis is included in the Git repo was originally downloaded from the following locations:
+
+- Training Data, https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+- Test Data, https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r Loading & Cleaning Data, echo=TRUE}
+
+# libraries
+library(caret)
+set.seed(286)
+
+# Loading data
+data <- read.csv('pml-training.csv', na.strings=c("NA","","#DIV/0!"), strip.white=T)
+data.test <- read.csv('pml-testing.csv', na.strings=c("NA","","#DIV/0!"), strip.white=T)
+```
+
+It was necessary to perform some cleaning to the data: 
+
+- There were a number of columns which consists of mostly N/A values, which were removed as they cannot possibly contribute any valuable information to our model.  
+- A set of columns which are identifiers and not measurements such as the subject's name and test timestamp were removed.
+
+``` {r Cleaning Data, echo=TRUE}
+# remove columns which are mostly NA
+isNA <- apply(data, 2, function(x) { sum(is.na(x)) })
+data <- data[,isNA==0]
+
+# remove columns which are not relevant
+data <- data[,-(1:7)]
+
+# repeat for the test (validation) dataset
+isNA <- apply(data.test, 2, function(x) { sum(is.na(x)) })
+data.test <- data.test[,isNA==0]
+data.test <- data.test[,-(1:7)]
+```
+
+## Training the Model
+
+It was found that the random tree training algorithm was liable to take an unacceptable amount of time for the purpose of this project. To manage the computational time needed, only 50% of the provided dataset is used to create the model. 
+
+```{r Subsetting the data,cache=TRUE}
+# select only a proportion of the dataset for training/testing
+subset.pct = 0.5
+data <- data[sample(nrow(data), subset.pct*nrow(data)), ]
+```
+
+Since we will be using Random Forest, we do not need actually need to partition a separate testing dataset, since the random forest algorithm will automatically split the datasets in each of its iterations. However, we make a 70/30 split here so that we can make a test prediction on a separate step later.
+
+```{r Partitioning the data, cache=TRUE}
+# Split the training data to training and test sets
+inTrain <- createDataPartition(y=data$classe,p=0.70,list=FALSE)
+training <- data[inTrain,]
+testing<-data[-inTrain,]
+```
+
+We will use the Random Forest method because of it's expected high accuracy. To avoid overfitting, we use `k`-fold cross-validation with `k`=5.
+
+```{r Training using random forest,cache=TRUE}
+# train using random forest
+# proximity = FALSE to cut down on computation time
+ctrl <- trainControl(method="cv", number=5)
+model <- train(classe ~ ., data=training, model="rf", trControl=ctrl,proximity=FALSE,allowParallel=TRUE)
+```
+
+## The Resulting Model & Test Prediction
+
+The result of the training created a Random Forest model with `ntree`=500 and `mtry`=27. The model is expected to be 97.92% accurate with 1.79% OOB error rate. 
+
+```{r Model, cache=TRUE}
+model
+model$finalModel
+```
+
+Validating the model against the test partition we created earlier found that the model is observed to be 98.6% accurate.
+
+```{r Model Test,cache=TRUE}
+# testing the model against testing data
+pred <- predict(model, newdata=testing)
+cm <- confusionMatrix(testing$classe,pred)
+cm
+```
+
+# Conclusions
+
+The model was used to predict the classifiers for the test dataset, as below:
+
+```{r Results,}
+answers <- predict(model,newdata=data.test)
+answers
+```
+
+
+# References
+1. Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. Read more: http://groupware.les.inf.puc-rio.br/har
